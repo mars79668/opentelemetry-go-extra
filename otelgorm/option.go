@@ -22,6 +22,13 @@ func WithAttributes(attrs ...attribute.KeyValue) Option {
 	}
 }
 
+// WithSyncMode configures syncmode load from db.
+func WithSyncMode() Option {
+	return func(p *otelPlugin) {
+		p.syncMode = true
+	}
+}
+
 // WithDBName configures a db.name attribute.
 func WithDBName(name string) Option {
 	return func(p *otelPlugin) {
