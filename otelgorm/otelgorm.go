@@ -26,6 +26,7 @@ type otelPlugin struct {
 	excludeQueryVars   bool
 	excludeMetrics     bool
 	includeDryRunSpans bool
+	syncMode  bool
 	queryFormatter     func(query string) string
 }
 
@@ -103,10 +104,18 @@ func (p *otelPlugin) before(spanName string) gormHookFunc {
 		if tx.DryRun && !p.includeDryRunSpans {
 			return
 		}
-		ctx := tx.Statement.Context
-		ctx = context.WithValue(ctx, parentCtxKey{}, ctx)
-		ctx, _ = p.tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient))
-		tx.Statement.Context = ctx
+		
+		if p.syncMode {
+			ctx := tx.Statement.Context
+			ctx = context.WithValue(ctx, parentCtxKey{}, ctx)
+			ctx, _ = p.tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient))
+			tx.Statement.Context = context.WithValue(context.Background(), parentCtxKey{}, ctx)
+		} else {
+			ctx := tx.Statement.Context
+			ctx = context.WithValue(ctx, parentCtxKey{}, ctx)
+			ctx, _ = p.tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindClient))
+			tx.Statement.Context = ctx
+		}
 	}
 }
 
@@ -115,7 +124,11 @@ func (p *otelPlugin) after() gormHookFunc {
 		if tx.DryRun && !p.includeDryRunSpans {
 			return
 		}
-		span := trace.SpanFromContext(tx.Statement.Context)
+		ctx := tx.Statement.Context
+		if p.syncMode {
+			ctx = tx.Statement.Context.Value(parentCtxKey{}).(context.Context)
+		}
+		span := trace.SpanFromContext()
 		if !span.IsRecording() {
 			return
 		}
